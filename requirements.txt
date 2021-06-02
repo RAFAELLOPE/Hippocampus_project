@@ -1,0 +1,12 @@
+numpy
+pandas
+torch
+hyperopt
+MedPy
+nibabel
+SimpleITK
+pydicom
+pyradiomics
+Flask
+Pillow
+dvc
