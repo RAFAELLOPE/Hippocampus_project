@@ -10,3 +10,4 @@ pyradiomics
 Flask
 Pillow
 dvc
+pika
