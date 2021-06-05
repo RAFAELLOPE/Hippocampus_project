@@ -2,3 +2,5 @@
 /uploads/
 /venv/
 /data/
+/src-node/node_modules/
+/src-node/.env
