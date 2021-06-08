@@ -1,11 +1,12 @@
-const express = require('express');
+ const express = require('express');
 const cors = require('cors');
 
 
 class Server{
     constructor(){
         this.app = express();
-        this.port = process.env.PORT;
+        //this.port = process.env.PORT;
+        this.port = 3000;
         this.ai_path_model = '/api/ai-model';
         //Middleware
         this.middlewares();
@@ -27,7 +28,7 @@ class Server{
     }
 
     listen(){
-        this.app.listen(this.port, () => {
+        this.app.listen( this.port, () => {
             console.log('Server running on port ', this.port);
         });
     }
