@@ -1,5 +1,6 @@
 const { response } = require("express");
 const { v4: uuidv4 } = require('uuid'); // extension para generar un nombre unico de fichero
+const ampq = require('amqplib/callback_api');
 const path = require('path');
 const fs = require('fs');
 
@@ -40,7 +41,7 @@ const upload = ( req, res = response) => {
   
       // Validar extension
   
-      const extensionesValidas = ['gz', 'nii']
+      const extensionesValidas = ['gz', 'nii', 'nii.gz']
       if ( !extensionesValidas.includes( extensionArchivo)) {
   
           return res.status(400).json({
@@ -69,10 +70,7 @@ const upload = ( req, res = response) => {
               });
               
           }
-  
-  
-  
-  
+
           res.json({
               ok: true,
               msg: 'Archivo subido',
@@ -80,8 +78,9 @@ const upload = ( req, res = response) => {
           });
   
       });
-  
-  
+
+
+
       
   }
 
