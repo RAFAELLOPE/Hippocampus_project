@@ -293,39 +293,5 @@ if __name__ == "__main__":
         df_rad_features.to_csv(os.path.join(results_dir,'rad_features.csv'))
     
 
-""" if __name__ == "__main__":
-    # This code expects a single command line argument with link to the directory containing
-    # routed studies
-    if len(sys.argv) != 4:
-        print("You should supply one command line argument pointing to the routing folder. Exiting.")
-        sys.exit()
 
-    # Find all subdirectories within the supplied directory. We assume that 
-    # one subdirectory contains a full study
-    subdirs = [os.path.join(sys.argv[1], d) for d in os.listdir(sys.argv[1]) if os.path.isdir(os.path.join(sys.argv[1], d))]
-
-    # Get the latest directory
-    study_dir = sorted(subdirs, key=lambda dir: os.stat(dir).st_mtime, reverse=True)[0]
-    print(f"Looking for series to run inference on in directory {study_dir}...")
-    volume, header = load_dicom_volume_as_numpy_from_list(get_series_for_inference(study_dir))
-    print(f"Found series of {volume.shape[2]} axial slices")
-    print("HippoVolume.AI: Running inference...")
-    model_path = sys.argv[2]
-    inference_agent = UNetInferenceAgent(device="cpu",
-                                         parameter_file_path= model_path)
-
-    # Run inference
-    pred_label = inference_agent.single_volume_inference_unpadded(np.array(volume))
-    pred_volumes = get_predicted_volumes(pred_label)
-    radiomic_features = get_radiomic_features(volume, pred_label)
-    df_rad_features = pd.DataFrame(radiomic_features)
-    # Create and save the report
-    header.SeriesInstanceUID = pydicom.uid.generate_uid()
-    print("Creating and pushing report...")
-    report_save_path = sys.argv[3]
-    report_imgs = create_report(pred_volumes, header, volume, pred_label)
-    for i, report_img in enumerate(report_imgs):
-        report_path = os.path.join(report_save_path, f"report_{i+1}.dcm")
-        save_report_as_dcm(header, report_img, report_path, i+1)
-    df_rad_features.to_csv(os.path.join(report_save_path,'rad_features.csv')) """
    
