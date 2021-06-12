@@ -2,36 +2,18 @@ import numpy as np
 from utils.utils import LoadHippocampusData
 from trainer.training import UNetExperiment
 from trainer.inference import UNetInferenceAgent
-import matplotlib.pyplot as plt
 from configuration import Config
 from radiomics.featureextractor import RadiomicsFeatureExtractor
 import SimpleITK as sitk
 import pandas as pd
-from flask import Flask
-import os
+import os, sys
 import datetime
 import numpy as np
 import pydicom
-
+import nibabel as nib
 from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
-
-app = Flask(__name__)
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-app.config['UPLOAD_FOLDER'] = os.path.join(APP_ROOT, 'uploads')
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-
-@app.route('/', methods=['GET', 'POST'])
-def uploader():
-    """ if request.method == 'POST':
-        #Form parameters
-        files = request.files.getlist('files')
-        #Save image
-        filenames = [os.path.join(app.config['UPLOAD_FOLDER'], f.filename) for f in files]
-        for f, i in zip(filenames, files):
-            i.save(f) """
-    return "Success"
 
 
 
@@ -50,6 +32,14 @@ def load_dicom_volume_as_numpy_from_list(dcmlist):
     hdr = dcmlist[0]
     hdr.PixelData = None
     return (np.stack(slices, 2), hdr)
+
+
+def load_nifti_volme_as_numpy_from_file(nifti_file):
+    nib_file = nib.load(nifti_file)
+    vol = nib_file.get_fdata()
+    hdr = nib_file.header
+    return (vol, hdr)
+
 
 
 def get_predicted_volumes(pred):
@@ -129,7 +119,7 @@ def overlay_images(background, seg):
     return img_rgb
 
 
-def create_report(inference, header, orig_vol, pred_vol):
+def create_report(inference, orig_vol, pred_vol):
     """Generates an image with inference report
 
     Arguments:
@@ -142,8 +132,7 @@ def create_report(inference, header, orig_vol, pred_vol):
         PIL image
     """
     images = []
-
-    for i_slc in range(volume.shape[-1]):
+    for i_slc in range(volume.shape[0]):
         pimg = Image.new("RGB", (1000, 1000))
         draw = ImageDraw.Draw(pimg)
         #header_font = ImageFont.truetype("arial.ttf", size=40)
@@ -152,7 +141,7 @@ def create_report(inference, header, orig_vol, pred_vol):
         main_font = ImageFont.load_default()
         draw.text((10, 0), "HippoVolume.AI", (255, 255, 255), font=header_font)
         draw.multiline_text((10, 90), 
-        f"Patient ID: {header.PatientID}\nTotal hippocampus volume {inference['total']} mm3\nAnterior volume {inference['anterior']} mm3\nPosterior volume {inference['posterior']} mm3", 
+        f"Total hippocampus volume {inference['total']} mm3\nAnterior volume {inference['anterior']} mm3\nPosterior volume {inference['posterior']} mm3", 
         (255, 255, 255), font=main_font)
         # Create a PIL image from array:
         # Numpy array needs to flipped, transposed and normalized to a matrix of values in the range of [0..255]
@@ -182,7 +171,7 @@ def save_report_as_dcm(header, report, path, instance_number, tot_images=32):
     Returns:
         N/A
     """
-    out = pydicom.Dataset(header)
+    out = pydicom.Dataset()
     out.file_meta = pydicom.Dataset()
     out.file_meta.TransferSyntaxUID = pydicom.uid.ExplicitVRLittleEndian
     out.is_little_endian = True
@@ -207,7 +196,8 @@ def save_report_as_dcm(header, report, path, instance_number, tot_images=32):
     out.HighBit = 7
     out.PixelRepresentation = 0
     out.InstanceNumber = str(instance_number)
-    out.ImagePositionPatient[-1] = str(instance_number)
+    #out.ImagePositionPatient[-1] = str(instance_number)
+    out.ImagePositionPatient = ['0', '0', str(header['qoffset_z'])]
     # Set time and date
     dt = datetime.date.today().strftime("%Y%m%d")
     tm = datetime.datetime.now().strftime("%H%M%S")
@@ -237,8 +227,10 @@ def get_series_for_inference(path):
     """
     dicoms = [pydicom.dcmread(os.path.join(path, f)) for f in os.listdir(path)]
 
+    #vol = nib.load(path).get_fdata()
+
     series_for_inference = [ds for ds in dicoms if ds.SeriesDescription == 'HippoCrop']
-    print(len(series_for_inference))
+    #print(len(series_for_inference))
     # Check if there are more than one series (using set comprehension).
     if len({f.SeriesInstanceUID for f in series_for_inference}) != 1:
         print("Error: can not figure out what series to run inference on")
@@ -253,11 +245,53 @@ def os_command(command):
     os.system(command)
 
 
-if __name__ == "__main__":
-    app.run(debug=True, port=6969)
+""" if __name__ == "__main__":
+    app.run(debug=True, port=6969) """
     
 
 
+if __name__ == "__main__":
+    # This code expects a single command line argument with link to the directory containing
+    # routed studies
+
+    # Find all subdirectories within the supplied directory. We assume that 
+    # one subdirectory contains a full study
+    # Define paths
+    base_path = os.path.dirname(__file__)
+    data_path = os.path.abspath(os.path.join(base_path, "..", "data"))
+    model_path = os.path.abspath(os.path.join(base_path, "..", "data", "model_weigths", "model.pth"))
+    uploads_dir = os.path.abspath(os.path.join(base_path, "..", "data", "uploads"))
+    results_dir = os.path.abspath(os.path.join(base_path, "..", "data", "results"))
+
+    files_dir = [os.path.join(uploads_dir, d) for d in os.listdir(uploads_dir) if  os.path.join(uploads_dir, d).endswith('.nii.gz')]
+
+    # Load model inference agent 
+    #device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cpu"
+    inference_agent = UNetInferenceAgent(device=device,
+                                         parameter_file_path= model_path)
+
+    for f in files_dir:
+        #volume, header = load_dicom_volume_as_numpy_from_list(get_series_for_inference(f))
+        volume, header = load_nifti_volme_as_numpy_from_file(f)
+        
+        # Run inference
+        pred_label = inference_agent.single_volume_inference_unpadded(volume)
+        pred_volumes = get_predicted_volumes(pred_label)
+        radiomic_features = get_radiomic_features(volume, pred_label)
+        df_rad_features = pd.DataFrame(radiomic_features)
+
+        # Create and save the report
+        header.SeriesInstanceUID = pydicom.uid.generate_uid()
+        print("Creating and pushing report...")
+
+        report_imgs = create_report(pred_volumes, volume, pred_label)
+        for i, report_img in enumerate(report_imgs):
+            report_path = os.path.join(results_dir, f"report_{i+1}.dcm")
+            save_report_as_dcm(header, report_img, report_path, i+1)
+        
+        df_rad_features.to_csv(os.path.join(results_dir,'rad_features.csv'))
+    
 
 """ if __name__ == "__main__":
     # This code expects a single command line argument with link to the directory containing

@@ -4,3 +4,5 @@
 /data/
 /src-node/node_modules/
 /src-node/.env
+
+*.nii.gz
